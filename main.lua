@@ -1,14 +1,14 @@
 local shader, canvasImage, canvasData, canvas, prevCanvas, timeAcc, tps, lifetime
 
 function love.load(args)
-    tps = 2
+    tps = 5
 
     shader = love.graphics.newShader('shader.frag')
     canvas = love.graphics.newCanvas(love.graphics.getDimensions())
     prevCanvas = love.graphics.newCanvas(love.graphics.getDimensions())
 
     timeAcc = 0
-    lifetime = os.time()
+    lifetime = 0
 end
 
 function love.update(dt)
@@ -21,6 +21,8 @@ function love.update(dt)
             function()
                 shader:send('dimensions', {love.graphics.getDimensions()})
                 shader:send('time', lifetime)
+                love.graphics.clear()
+                love.graphics.draw(prevCanvas)
                 love.graphics.setShader(shader)
                 love.graphics.draw(prevCanvas)
                 love.graphics.setShader()
