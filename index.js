@@ -4,7 +4,7 @@ const paramConfig = new ParamConfig(
   $("#cfg-outer")
 );
 
-tf.setBackend("cpu");
+tf.setBackend("webgl");
 
 const convolutions = [
   {
@@ -54,7 +54,7 @@ const convolutions = [
         .conv2d(this.filterUnpopulate, 1, 1)
         .equal(1)
         .logicalNot()
-        .where(sceneSideMasks.right.logicalNot(), tf.ones(scene.shape));
+        .where(sceneSideMasks.right.logicalNot(), tiles);
       const populated = tiles.conv2d(this.filterPopulate, 1, 1).equal(1);
       return tiles.minimum(unpopulated).maximum(populated);
     },
@@ -124,7 +124,11 @@ for (let key of Object.keys(sceneSides)) {
 
 function update() {
   for (let convolution of convolutions) {
-    scene = convolution.convolve.call(convolution, scene);
+    const newScene = tf.tidy(() =>
+      convolution.convolve.call(convolution, scene)
+    );
+    scene.dispose();
+    scene = newScene;
   }
 }
 
