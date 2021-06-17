@@ -171,6 +171,10 @@ function drawCircle() {
 }
 
 function update() {
+  if (paramConfig.clicked("clearTiles")) {
+    clearTiles();
+    return;
+  }
   if (mouse.down) {
     drawCircle();
   }
@@ -187,6 +191,12 @@ function run() {
   update();
   tf.browser.toPixels(scene, canvas);
   setTimeout(run, (1 / paramConfig.getVal("tps")) * 1000);
+}
+
+function clearTiles() {
+  const newScene = tf.zeros(scene.shape);
+  scene.dispose();
+  scene = newScene;
 }
 
 function countTiles() {

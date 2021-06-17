@@ -2,8 +2,9 @@ const numberParam = {
   serialise: (tag) => String(tag.val()),
   deserialise: Number,
   setVal: (tag, val) => tag.val(val),
-  change: (key, stateObj) => (evt) =>
-    (stateObj[key].val = +$(evt.target).val()),
+  change: (key, stateObj) => (evt) => {
+    stateObj[key].val = +$(evt.target).val();
+  },
 };
 
 const paramTypes = {
@@ -19,6 +20,9 @@ const paramTypes = {
   },
   number: { ...numberParam },
   range: { ...numberParam },
+  button: {
+    clickable: true,
+  },
 };
 
 class ParamConfig {
@@ -29,10 +33,13 @@ class ParamConfig {
     const initialValues = this.parseUrlParams(rawUrlParams);
 
     for (let cfgData of parameterConfig) {
-      const inpTag = $(document.createElement("input")).attr(
-        "type",
-        cfgData.type
-      );
+      let inpTag;
+      if (cfgData.type === "button") {
+        inpTag = $(document.createElement("button")).addClass("btn btn-info");
+        inpTag.text(cfgData.text);
+      } else {
+        inpTag = $(document.createElement("input")).attr("type", cfgData.type);
+      }
       if (cfgData.attrs) {
         for (let attr in cfgData.attrs) {
           inpTag.attr(attr, cfgData.attrs[attr]);
@@ -60,19 +67,29 @@ class ParamConfig {
         serialise: typeCfg.serialise,
         default: cfgData.default,
       };
-      const inpTagChange = typeCfg.change(cfgData.id, this.state);
-      inpTag.change((evt) => {
-        this.updates.push(cfgData.id);
-        inpTagChange(evt);
-        this.tellListeners();
-      });
+      if (typeCfg.change) {
+        const inpTagChange = typeCfg.change(cfgData.id, this.state);
+        inpTag.change((evt) => {
+          this.updates.push(cfgData.id);
+          inpTagChange(evt);
+          this.tellListeners();
+        });
+      }
+      if (typeCfg.clickable) {
+        inpTag.click(() => {
+          this.state[cfgData.id].clicked = true;
+          this.tellListeners();
+        });
+      }
 
-      typeCfg.setVal(
-        inpTag,
-        initialValues[cfgData.id] !== undefined
-          ? typeCfg.deserialise(initialValues[cfgData.id])
-          : cfgData.default
-      );
+      if (typeCfg.setVal) {
+        typeCfg.setVal(
+          inpTag,
+          initialValues[cfgData.id] !== undefined
+            ? typeCfg.deserialise(initialValues[cfgData.id])
+            : cfgData.default
+        );
+      }
       inpTag.trigger("change");
     }
   }
@@ -123,10 +140,19 @@ class ParamConfig {
     return this.state[id].val;
   }
 
+  clicked(id) {
+    if (!this.state[id].clicked) return false;
+    this.state[id].clicked = false;
+    return true;
+  }
+
   serialiseToURLParams() {
     let params = "";
     for (let key in this.state) {
-      if (this.state[key].default === this.state[key].val) {
+      if (
+        this.state[key].default === this.state[key].val ||
+        this.state.serialise === undefined
+      ) {
         continue;
       }
 

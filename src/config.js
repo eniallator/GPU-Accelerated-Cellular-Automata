@@ -11,12 +11,18 @@ const parameterConfig = [
   },
   {
     id: "drawRadius",
-    label: "Radius of circles drawn",
+    label: "Circle Radius",
+    tooltip: "Radius of the circles drawn",
     default: 5,
     type: "number",
     attrs: {
       min: 1,
       max: 25,
     },
+  },
+  {
+    id: "clearTiles",
+    text: "Clear all tiles",
+    type: "button",
   },
 ];
