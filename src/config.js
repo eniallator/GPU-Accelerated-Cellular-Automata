@@ -1,12 +1,12 @@
 const parameterConfig = [
   {
     id: "tps",
-    label: "Updates Per Second",
-    default: 5,
+    label: "Ticks Per Second",
+    default: 10,
     type: "number",
     attrs: {
       min: 1,
-      max: 10,
+      max: 50,
     },
   },
 ];
