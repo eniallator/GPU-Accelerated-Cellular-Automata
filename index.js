@@ -122,7 +122,10 @@ canvas.onmouseup = canvas.ontouchend = () => {
   mouse.down = false;
 };
 
-let scene = tf.randomUniform([100, 100, 1]).greater(0.8);
+const sceneSideLength = 300;
+let scene = tf
+  .randomUniform([sceneSideLength, sceneSideLength, 1])
+  .greater(0.8);
 const newSceneArray = (n = 0) =>
   new Array(scene.shape[0])
     .fill()
@@ -149,28 +152,28 @@ for (let key of Object.keys(sceneSides)) {
   sceneSideMasks[key] = sceneSides[key].cast("bool");
 }
 
-function tryDrawShapes() {
-  if (!mouse.down) return;
-  const sceneData = scene.arraySync();
+function drawCircle() {
+  const newScene = tf.tidy(() => {
+    const xCoordsDst = tf
+      .range(0, sceneSideLength)
+      .tile([sceneSideLength])
+      .reshape(scene.shape);
+    const sceneWithCircle = xCoordsDst
+      .sub(mouse.pos.x)
+      .pow(2)
+      .add(xCoordsDst.transpose().reshape(scene.shape).sub(mouse.pos.y).pow(2))
+      .less(paramConfig.getVal("drawRadius") ** 2)
+      .cast(scene.dtype);
+    return sceneWithCircle.where(sceneWithCircle.greater(0), scene);
+  });
   scene.dispose();
-  const newScene = newSceneArray();
-  for (let y = 0; y < newScene.length; y++) {
-    for (let x = 0; x < newScene[y].length; x++) {
-      if (
-        (mouse.pos.x - x) ** 2 + (mouse.pos.y - y) ** 2 <
-        paramConfig.getVal("drawRadius") ** 2
-      ) {
-        newScene[y][x] = [1];
-      } else {
-        newScene[y][x] = sceneData[y][x];
-      }
-    }
-  }
-  scene = tf.tensor(newScene);
+  scene = newScene;
 }
 
 function update() {
-  tryDrawShapes();
+  if (mouse.down) {
+    drawCircle();
+  }
   for (let convolution of convolutions) {
     const newScene = tf.tidy(() =>
       convolution.convolve.call(convolution, scene)

@@ -2,11 +2,11 @@ const parameterConfig = [
   {
     id: "tps",
     label: "Ticks Per Second",
-    default: 25,
+    default: 40,
     type: "number",
     attrs: {
       min: 1,
-      max: 50,
+      max: 100,
     },
   },
   {
