@@ -24,13 +24,13 @@ const parameterConfig = [
     id: "bgColour",
     label: "Background Colour",
     type: "color",
-    default: "#000000",
+    default: "000000",
   },
   {
     id: "particleColour",
     label: "Particle Colour",
     type: "color",
-    default: "#FFFFFF",
+    default: "FFFFFF",
   },
   {
     id: "clearTiles",

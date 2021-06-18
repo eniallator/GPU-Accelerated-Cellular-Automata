@@ -120,8 +120,6 @@ canvas.onmouseup = canvas.ontouchend = () => {
   mouse.down = false;
 };
 
-const colours = new Array(2).fill().map(() => [0, 0, 0]);
-
 function hexToRGB(hex) {
   const match = hex
     .toLowerCase()
@@ -134,10 +132,12 @@ function hexToRGB(hex) {
   ];
 }
 
+const colourIds = ["bgColour", "particleColour"];
+let colours;
+
 paramConfig.addListener(
   (state, updates) => {
-    colours[0] = hexToRGB(paramConfig.getVal("bgColour"));
-    colours[1] = hexToRGB(paramConfig.getVal("particleColour"));
+    colours = colourIds.map((id) => hexToRGB(paramConfig.getVal(id)));
   },
   ["bgColour", "particleColour"]
 );

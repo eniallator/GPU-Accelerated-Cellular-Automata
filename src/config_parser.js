@@ -24,10 +24,10 @@ const paramTypes = {
     clickable: true,
   },
   color: {
-    serialise: (tag) => String(tag.val()),
-    deserialise: (val) => val,
+    serialise: (tag) => String(tag.val().substr(1).toUpperCase()),
+    deserialise: (val) => val.toUpperCase(),
     setVal: (tag, val) => {
-      tag.val(val);
+      tag.val("#" + val);
     },
     input: (key, stateObj) => (evt) => {
       stateObj[key].val = $(evt.target).val();
