@@ -23,6 +23,16 @@ const paramTypes = {
   button: {
     clickable: true,
   },
+  color: {
+    serialise: (tag) => String(tag.val()),
+    deserialise: (val) => val,
+    setVal: (tag, val) => {
+      tag.val(val);
+    },
+    input: (key, stateObj) => (evt) => {
+      stateObj[key].val = $(evt.target).val();
+    },
+  },
 };
 
 class ParamConfig {
@@ -75,6 +85,14 @@ class ParamConfig {
           this.tellListeners();
         });
       }
+      if (typeCfg.input) {
+        const inpTagChange = typeCfg.input(cfgData.id, this.state);
+        inpTag.on("input", (evt) => {
+          this.updates.push(cfgData.id);
+          inpTagChange(evt);
+          this.tellListeners();
+        });
+      }
       if (typeCfg.clickable) {
         inpTag.click(() => {
           this.state[cfgData.id].clicked = true;
@@ -91,6 +109,7 @@ class ParamConfig {
         );
       }
       inpTag.trigger("change");
+      inpTag.trigger("input");
     }
   }
 
@@ -151,7 +170,7 @@ class ParamConfig {
     for (let key in this.state) {
       if (
         this.state[key].default === this.state[key].val ||
-        this.state.serialise === undefined
+        this.state[key].serialise === undefined
       ) {
         continue;
       }

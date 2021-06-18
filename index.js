@@ -92,8 +92,6 @@ new ClipboardJS("#share-btn", {
 
 const canvas = document.querySelector("#canvas");
 const ctx = canvas.getContext("2d");
-ctx.fillStyle = "black";
-ctx.strokeStyle = "white";
 
 const mouse = {
   down: false,
@@ -122,10 +120,32 @@ canvas.onmouseup = canvas.ontouchend = () => {
   mouse.down = false;
 };
 
+const colours = new Array(2).fill().map(() => [0, 0, 0]);
+
+function hexToRGB(hex) {
+  const match = hex
+    .toLowerCase()
+    .match(/^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/);
+  if (!match) return false;
+  return [
+    parseInt(match[1], 16),
+    parseInt(match[2], 16),
+    parseInt(match[3], 16),
+  ];
+}
+
+paramConfig.addListener(
+  (state, updates) => {
+    colours[0] = hexToRGB(paramConfig.getVal("bgColour"));
+    colours[1] = hexToRGB(paramConfig.getVal("particleColour"));
+  },
+  ["bgColour", "particleColour"]
+);
+
 const sceneSideLength = 300;
-let scene = tf
-  .randomUniform([sceneSideLength, sceneSideLength, 1])
-  .greater(0.8);
+let scene = tf.tidy(() =>
+  tf.keep(tf.randomUniform([sceneSideLength, sceneSideLength, 1]).greater(0.8))
+);
 const newSceneArray = (n = 0) =>
   new Array(scene.shape[0])
     .fill()
@@ -152,6 +172,18 @@ for (let key of Object.keys(sceneSides)) {
   sceneSideMasks[key] = sceneSides[key].cast("bool");
 }
 
+function mapIdsToColours(tiles, cols) {
+  return tf.tidy(() => {
+    let pixelData = tf.zeros([...tiles.shape.slice(0, -1), cols[0].length]);
+    for (let i = 0; i < cols.length; i++) {
+      pixelData = pixelData.add(
+        tiles.equal(i).mul(cols[i].map((channel) => channel / 255))
+      );
+    }
+    return tf.keep(pixelData);
+  });
+}
+
 function drawCircle() {
   const newScene = tf.tidy(() => {
     const xCoordsDst = tf
@@ -164,7 +196,7 @@ function drawCircle() {
       .add(xCoordsDst.transpose().reshape(scene.shape).sub(mouse.pos.y).pow(2))
       .less(paramConfig.getVal("drawRadius") ** 2)
       .cast(scene.dtype);
-    return sceneWithCircle.where(sceneWithCircle.greater(0), scene);
+    return tf.keep(sceneWithCircle.where(sceneWithCircle.greater(0), scene));
   });
   scene.dispose();
   scene = newScene;
@@ -180,16 +212,20 @@ function update() {
   }
   for (let convolution of convolutions) {
     const newScene = tf.tidy(() =>
-      convolution.convolve.call(convolution, scene)
+      tf.keep(convolution.convolve.call(convolution, scene))
     );
     scene.dispose();
     scene = newScene;
   }
 }
 
+let pixelData;
+
 function run() {
   update();
-  tf.browser.toPixels(scene, canvas);
+  if (pixelData) pixelData.dispose();
+  pixelData = mapIdsToColours(scene, colours);
+  tf.browser.toPixels(pixelData, canvas);
   setTimeout(run, (1 / paramConfig.getVal("tps")) * 1000);
 }
 
@@ -207,6 +243,5 @@ function countTiles() {
   return count;
 }
 
-console.log(countTiles());
 paramConfig.tellListeners(true);
 run();

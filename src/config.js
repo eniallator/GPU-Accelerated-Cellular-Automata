@@ -5,7 +5,7 @@ const parameterConfig = [
     default: 40,
     type: "number",
     attrs: {
-      min: 1,
+      min: 40,
       max: 100,
     },
   },
@@ -19,6 +19,18 @@ const parameterConfig = [
       min: 1,
       max: 25,
     },
+  },
+  {
+    id: "bgColour",
+    label: "Background Colour",
+    type: "color",
+    default: "#000000",
+  },
+  {
+    id: "particleColour",
+    label: "Particle Colour",
+    type: "color",
+    default: "#FFFFFF",
   },
   {
     id: "clearTiles",
