@@ -126,6 +126,42 @@ const convolutions = [
         .add(willFallDownMask.mul(tiles.conv2d(this.filterPopulate, 1, 1)));
     },
   },
+  {
+    // Swap Water Below Sand
+    filterWillSwap: tf
+      .tensor2d([
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 1, 0],
+      ])
+      .reshape([3, 3, 1, 1]),
+    filterNoise: tf
+      .tensor2d([
+        [0, 0, 0],
+        [0, 1, 0],
+        [0, -1, 0],
+      ])
+      .reshape([3, 3, 1, 1]),
+    filterAddSwapDiff: tf
+      .tensor2d([
+        [0, -1, 0],
+        [0, 1, 0],
+        [0, 0, 0],
+      ])
+      .reshape([3, 3, 1, 1]),
+    convolve: function (tiles, noise) {
+      const willSwapMask = tiles
+        .equal(1)
+        .cast(tiles.dtype)
+        .where(
+          tiles.conv2d(this.filterWillSwap, 1, 1).equal(2),
+          tf.zeros(tiles.shape)
+        )
+        .mul(noise.conv2d(this.filterNoise, 1, 1).greater(0.1));
+
+      return tiles.add(willSwapMask.conv2d(this.filterAddSwapDiff, 1, 1));
+    },
+  },
 ];
 
 new ClipboardJS("#share-btn", {
