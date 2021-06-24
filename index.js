@@ -8,71 +8,122 @@ tf.setBackend("webgl");
 
 const convolutions = [
   {
-    // Fall left
-    filterUnpopulate: tf
-      .tensor2d([
-        [-1, -1, 0],
-        [-1, 0.5, 0],
-        [-1, 0.5, 0],
-      ])
-      .reshape([3, 3, 1, 1]),
-    filterPopulate: tf
+    // Fall Left
+    filterWillFallLeft: tf
       .tensor2d([
         [0, -1, -1],
         [0, -1, 0.5],
         [0, -1, 0.5],
       ])
       .reshape([3, 3, 1, 1]),
-    convolve: function (tiles) {
-      const unpopulated = tiles
-        .conv2d(this.filterUnpopulate, 1, 1)
-        .equal(1)
-        .logicalNot()
-        .where(sceneSideMasks.left.logicalNot(), tiles);
-      const populated = tiles.conv2d(this.filterPopulate, 1, 1).equal(1);
-      return tiles.minimum(unpopulated).maximum(populated);
-    },
-  },
-  {
-    // Fall right
     filterUnpopulate: tf
       .tensor2d([
-        [0, -1, -1],
-        [0, 0.5, -1],
-        [0, 0.5, -1],
+        [0, 0, 0],
+        [1, 0, 0],
+        [0, 0, 0],
       ])
       .reshape([3, 3, 1, 1]),
     filterPopulate: tf
+      .tensor2d([
+        [0, 0, 0],
+        [0, 0, 1],
+        [0, 0, 0],
+      ])
+      .reshape([3, 3, 1, 1]),
+    convolve: function (tiles) {
+      const willFallLeftMask = tiles
+        .notEqual(0)
+        .cast(tiles.dtype)
+        .conv2d(this.filterWillFallLeft, 1, 1)
+        .equal(1);
+
+      return tiles
+        .mul(
+          willFallLeftMask
+            .conv2d(this.filterUnpopulate, 1, 1)
+            .equal(0)
+            .maximum(sceneSides.left)
+        )
+        .add(willFallLeftMask.mul(tiles.conv2d(this.filterPopulate, 1, 1)));
+    },
+  },
+  {
+    // Fall Right
+    filterWillFallRight: tf
       .tensor2d([
         [-1, -1, 0],
         [0.5, -1, 0],
         [0.5, -1, 0],
       ])
       .reshape([3, 3, 1, 1]),
+    filterUnpopulate: tf
+      .tensor2d([
+        [0, 0, 0],
+        [0, 0, 1],
+        [0, 0, 0],
+      ])
+      .reshape([3, 3, 1, 1]),
+    filterPopulate: tf
+      .tensor2d([
+        [0, 0, 0],
+        [1, 0, 0],
+        [0, 0, 0],
+      ])
+      .reshape([3, 3, 1, 1]),
     convolve: function (tiles) {
-      const unpopulated = tiles
-        .conv2d(this.filterUnpopulate, 1, 1)
-        .equal(1)
-        .logicalNot()
-        .where(sceneSideMasks.right.logicalNot(), tiles);
-      const populated = tiles.conv2d(this.filterPopulate, 1, 1).equal(1);
-      return tiles.minimum(unpopulated).maximum(populated);
+      const willFallRightMask = tiles
+        .notEqual(0)
+        .cast(tiles.dtype)
+        .conv2d(this.filterWillFallRight, 1, 1)
+        .equal(1);
+
+      return tiles
+        .mul(
+          willFallRightMask
+            .conv2d(this.filterUnpopulate, 1, 1)
+            .equal(0)
+            .maximum(sceneSides.left)
+        )
+        .add(willFallRightMask.mul(tiles.conv2d(this.filterPopulate, 1, 1)));
     },
   },
   {
-    // Fall down
-    filter: tf
+    // Fall Down
+    filterWillFallDown: tf
       .tensor2d([
         [0, 1, 0],
-        [0, 0.4, 0],
-        [0, 0.6, 0],
+        [0, -1, 0],
+        [0, 0, 0],
+      ])
+      .reshape([3, 3, 1, 1]),
+    filterUnpopulate: tf
+      .tensor2d([
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 1, 0],
+      ])
+      .reshape([3, 3, 1, 1]),
+    filterPopulate: tf
+      .tensor2d([
+        [0, 1, 0],
+        [0, 0, 0],
+        [0, 0, 0],
       ])
       .reshape([3, 3, 1, 1]),
     convolve: function (tiles) {
-      const floor = tiles.mul(sceneSides.bottom);
-      const convolved = tiles.conv2d(this.filter, 1, "same");
-      const mask = convolved.notEqual(1.4);
-      return convolved.mul(mask).minimum(1).floor().maximum(floor);
+      let willFallDownMask = tiles
+        .notEqual(0)
+        .cast(tiles.dtype)
+        .conv2d(this.filterWillFallDown, 1, 1)
+        .equal(1);
+      return tiles
+        .mul(
+          willFallDownMask
+            .conv2d(this.filterUnpopulate, 1, 1)
+            .equal(0)
+            .maximum(sceneSides.bottom)
+        )
+        .add(willFallDownMask.mul(tiles.conv2d(this.filterPopulate, 1, 1)));
     },
   },
 ];
@@ -132,7 +183,7 @@ function hexToRGB(hex) {
   ];
 }
 
-const colourIds = ["bgColour", "particleColour"];
+const colourIds = ["bgColour", "sandColour", "waterColour"];
 let colours;
 
 paramConfig.addListener(
@@ -142,10 +193,25 @@ paramConfig.addListener(
   ["bgColour", "particleColour"]
 );
 
+const generateRandomScene = (chanceForParticle, length, numParticles) => {
+  const shape = [length, length, 1];
+  return tf.tidy(() => {
+    const noise = tf.randomUniform(shape);
+    let scene = tf.zeros(shape);
+    for (let i = 0; i < numParticles; i++) {
+      scene = scene.add(
+        noise
+          .greater(1 - (1 - i / numParticles) * chanceForParticle)
+          .cast(scene.dtype)
+      );
+    }
+    return tf.keep(scene);
+  });
+};
+
 const sceneSideLength = 300;
-let scene = tf.tidy(() =>
-  tf.keep(tf.randomUniform([sceneSideLength, sceneSideLength, 1]).greater(0.8))
-);
+let scene = generateRandomScene(0.2, sceneSideLength, colourIds.length - 1);
+
 const newSceneArray = (n = 0) =>
   new Array(scene.shape[0])
     .fill()
@@ -184,7 +250,7 @@ function mapIdsToColours(tiles, cols) {
   });
 }
 
-function drawCircle() {
+function drawCircle(particleId) {
   const newScene = tf.tidy(() => {
     const xCoordsDst = tf
       .range(0, sceneSideLength)
@@ -195,24 +261,34 @@ function drawCircle() {
       .pow(2)
       .add(xCoordsDst.transpose().reshape(scene.shape).sub(mouse.pos.y).pow(2))
       .less(paramConfig.getVal("drawRadius") ** 2)
-      .cast(scene.dtype);
+      .cast(scene.dtype)
+      .mul(particleId);
     return tf.keep(sceneWithCircle.where(sceneWithCircle.greater(0), scene));
   });
   scene.dispose();
   scene = newScene;
 }
 
+function clearTiles() {
+  const newScene = tf.zeros(scene.shape);
+  scene.dispose();
+  scene = newScene;
+}
+
+let randomNoise;
 function update() {
   if (paramConfig.clicked("clearTiles")) {
     clearTiles();
     return;
   }
+  if (randomNoise) randomNoise.dispose();
+  randomNoise = tf.randomUniform(scene.shape);
   if (mouse.down) {
-    drawCircle();
+    drawCircle(2);
   }
   for (let convolution of convolutions) {
     const newScene = tf.tidy(() =>
-      tf.keep(convolution.convolve.call(convolution, scene))
+      tf.keep(convolution.convolve.call(convolution, scene, randomNoise))
     );
     scene.dispose();
     scene = newScene;
@@ -229,16 +305,10 @@ function run() {
   setTimeout(run, (1 / paramConfig.getVal("tps")) * 1000);
 }
 
-function clearTiles() {
-  const newScene = tf.zeros(scene.shape);
-  scene.dispose();
-  scene = newScene;
-}
-
 function countTiles() {
-  let count = 0;
+  let count = new Array(colourIds.length).fill(0);
   for (let val of scene.dataSync()) {
-    count += val;
+    count[val]++;
   }
   return count;
 }

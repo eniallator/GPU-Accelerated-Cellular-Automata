@@ -24,13 +24,19 @@ const parameterConfig = [
     id: "bgColour",
     label: "Background Colour",
     type: "color",
-    default: "000000",
+    default: "04C6F6",
   },
   {
-    id: "particleColour",
-    label: "Particle Colour",
+    id: "sandColour",
+    label: "Sand Colour",
     type: "color",
-    default: "FFFFFF",
+    default: "E6A433",
+  },
+  {
+    id: "waterColour",
+    label: "Water Colour",
+    type: "color",
+    default: "0000FF",
   },
   {
     id: "clearTiles",
