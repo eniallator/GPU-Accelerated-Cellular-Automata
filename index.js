@@ -157,7 +157,11 @@ const convolutions = [
           tiles.conv2d(this.filterWillSwap, 1, 1).equal(2),
           tf.zeros(tiles.shape)
         )
-        .mul(noise.conv2d(this.filterNoise, 1, 1).greater(0.1));
+        .mul(
+          noise
+            .conv2d(this.filterNoise, 1, 1)
+            .greater(1 - 2 * paramConfig.getVal("swapChance"))
+        );
 
       return tiles.add(willSwapMask.conv2d(this.filterAddSwapDiff, 1, 1));
     },
@@ -209,8 +213,8 @@ canvas.onmouseup = canvas.ontouchend = () => {
 
 function hexToRGB(hex) {
   const match = hex
-    .toLowerCase()
-    .match(/^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/);
+    .toUpperCase()
+    .match(/^#?([\dA-F]{2})([\dA-F]{2})([\dA-F]{2})$/);
   if (!match) return false;
   return [
     parseInt(match[1], 16),
@@ -320,7 +324,7 @@ function update() {
   if (randomNoise) randomNoise.dispose();
   randomNoise = tf.randomUniform(scene.shape);
   if (mouse.down) {
-    drawCircle(2);
+    drawCircle(paramConfig.getVal("selectedTile"));
   }
   for (let convolution of convolutions) {
     const newScene = tf.tidy(() =>

@@ -30,7 +30,7 @@ const paramTypes = {
       tag.val("#" + val);
     },
     input: (key, stateObj) => (evt) => {
-      stateObj[key].val = $(evt.target).val();
+      stateObj[key].val = $(evt.target).val().substr(1).toUpperCase();
     },
   },
 };
