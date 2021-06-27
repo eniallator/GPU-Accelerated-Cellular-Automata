@@ -79,7 +79,7 @@ state.config.addListener(
   (_, updates) => {
     colours = colourIds.map((id) => hexToRGB(state.config.getVal(id)));
   },
-  ["bgColour", "particleColour"]
+  ["bgColour", "sandColour", "waterColour"]
 );
 
 function mapIdsToColours(tiles, cols) {
