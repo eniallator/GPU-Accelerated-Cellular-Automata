@@ -1,171 +1,20 @@
-const paramConfig = new ParamConfig(
-  parameterConfig,
-  window.location.search,
-  $("#cfg-outer")
-);
-
 tf.setBackend("webgl");
 
-const convolutions = [
-  {
-    // Fall Left
-    filterWillFallLeft: tf
-      .tensor2d([
-        [0, -1, -1],
-        [0, -1, 0.5],
-        [0, -1, 0.5],
-      ])
-      .reshape([3, 3, 1, 1]),
-    filterUnpopulate: tf
-      .tensor2d([
-        [0, 0, 0],
-        [1, 0, 0],
-        [0, 0, 0],
-      ])
-      .reshape([3, 3, 1, 1]),
-    filterPopulate: tf
-      .tensor2d([
-        [0, 0, 0],
-        [0, 0, 1],
-        [0, 0, 0],
-      ])
-      .reshape([3, 3, 1, 1]),
-    convolve: function (tiles) {
-      const willFallLeftMask = tiles
-        .notEqual(0)
-        .cast(tiles.dtype)
-        .conv2d(this.filterWillFallLeft, 1, 1)
-        .equal(1);
+const state = {
+  config: new ParamConfig(
+    parameterConfig,
+    window.location.search,
+    $("#cfg-outer")
+  ),
+  tiles: new Tiles(300),
+};
+state.noise = tf.randomUniform(state.tiles.data.shape);
 
-      return tiles
-        .mul(
-          willFallLeftMask
-            .conv2d(this.filterUnpopulate, 1, 1)
-            .equal(0)
-            .maximum(sceneSides.left)
-        )
-        .add(willFallLeftMask.mul(tiles.conv2d(this.filterPopulate, 1, 1)));
-    },
-  },
-  {
-    // Fall Right
-    filterWillFallRight: tf
-      .tensor2d([
-        [-1, -1, 0],
-        [0.5, -1, 0],
-        [0.5, -1, 0],
-      ])
-      .reshape([3, 3, 1, 1]),
-    filterUnpopulate: tf
-      .tensor2d([
-        [0, 0, 0],
-        [0, 0, 1],
-        [0, 0, 0],
-      ])
-      .reshape([3, 3, 1, 1]),
-    filterPopulate: tf
-      .tensor2d([
-        [0, 0, 0],
-        [1, 0, 0],
-        [0, 0, 0],
-      ])
-      .reshape([3, 3, 1, 1]),
-    convolve: function (tiles) {
-      const willFallRightMask = tiles
-        .notEqual(0)
-        .cast(tiles.dtype)
-        .conv2d(this.filterWillFallRight, 1, 1)
-        .equal(1);
-
-      return tiles
-        .mul(
-          willFallRightMask
-            .conv2d(this.filterUnpopulate, 1, 1)
-            .equal(0)
-            .maximum(sceneSides.left)
-        )
-        .add(willFallRightMask.mul(tiles.conv2d(this.filterPopulate, 1, 1)));
-    },
-  },
-  {
-    // Fall Down
-    filterWillFallDown: tf
-      .tensor2d([
-        [0, 1, 0],
-        [0, -1, 0],
-        [0, 0, 0],
-      ])
-      .reshape([3, 3, 1, 1]),
-    filterUnpopulate: tf
-      .tensor2d([
-        [0, 0, 0],
-        [0, 0, 0],
-        [0, 1, 0],
-      ])
-      .reshape([3, 3, 1, 1]),
-    filterPopulate: tf
-      .tensor2d([
-        [0, 1, 0],
-        [0, 0, 0],
-        [0, 0, 0],
-      ])
-      .reshape([3, 3, 1, 1]),
-    convolve: function (tiles) {
-      let willFallDownMask = tiles
-        .notEqual(0)
-        .cast(tiles.dtype)
-        .conv2d(this.filterWillFallDown, 1, 1)
-        .equal(1);
-      return tiles
-        .mul(
-          willFallDownMask
-            .conv2d(this.filterUnpopulate, 1, 1)
-            .equal(0)
-            .maximum(sceneSides.bottom)
-        )
-        .add(willFallDownMask.mul(tiles.conv2d(this.filterPopulate, 1, 1)));
-    },
-  },
-  {
-    // Swap Water Below Sand
-    filterWillSwap: tf
-      .tensor2d([
-        [0, 0, 0],
-        [0, 0, 0],
-        [0, 1, 0],
-      ])
-      .reshape([3, 3, 1, 1]),
-    filterNoise: tf
-      .tensor2d([
-        [0, 0, 0],
-        [0, 1, 0],
-        [0, -1, 0],
-      ])
-      .reshape([3, 3, 1, 1]),
-    filterAddSwapDiff: tf
-      .tensor2d([
-        [0, -1, 0],
-        [0, 1, 0],
-        [0, 0, 0],
-      ])
-      .reshape([3, 3, 1, 1]),
-    convolve: function (tiles, noise) {
-      const willSwapMask = tiles
-        .equal(1)
-        .cast(tiles.dtype)
-        .where(
-          tiles.conv2d(this.filterWillSwap, 1, 1).equal(2),
-          tf.zeros(tiles.shape)
-        )
-        .mul(
-          noise
-            .conv2d(this.filterNoise, 1, 1)
-            .greater(1 - 2 * paramConfig.getVal("swapChance"))
-        );
-
-      return tiles.add(willSwapMask.conv2d(this.filterAddSwapDiff, 1, 1));
-    },
-  },
+const rules = [
+  new FallLeft(),
+  new FallRight(),
+  new FallDown(),
+  new SwapVertical(),
 ];
 
 new ClipboardJS("#share-btn", {
@@ -176,7 +25,7 @@ new ClipboardJS("#share-btn", {
       location.host +
       location.pathname +
       "?" +
-      paramConfig.serialiseToURLParams()
+      state.config.serialiseToURLParams()
     );
   },
 }).on("success", (evt) => alert("Copied share link to clipboard"));
@@ -189,8 +38,8 @@ const mouse = {
   pos: { x: 0, y: 0 },
 };
 const mouseToTileCoords = (x, y) => [
-  Math.floor((x / $("#canvas").width()) * scene.shape[1]),
-  Math.floor((y / $("#canvas").height()) * scene.shape[0]),
+  Math.floor((x / $("#canvas").width()) * state.tiles.sideLength),
+  Math.floor((y / $("#canvas").height()) * state.tiles.sideLength),
 ];
 canvas.onmousemove = (ev) => {
   [mouse.pos.x, mouse.pos.y] = mouseToTileCoords(ev.clientX, ev.clientY);
@@ -226,57 +75,12 @@ function hexToRGB(hex) {
 const colourIds = ["bgColour", "sandColour", "waterColour"];
 let colours;
 
-paramConfig.addListener(
-  (state, updates) => {
-    colours = colourIds.map((id) => hexToRGB(paramConfig.getVal(id)));
+state.config.addListener(
+  (_, updates) => {
+    colours = colourIds.map((id) => hexToRGB(state.config.getVal(id)));
   },
   ["bgColour", "particleColour"]
 );
-
-const generateRandomScene = (chanceForParticle, length, numParticles) => {
-  const shape = [length, length, 1];
-  return tf.tidy(() => {
-    const noise = tf.randomUniform(shape);
-    let scene = tf.zeros(shape);
-    for (let i = 0; i < numParticles; i++) {
-      scene = scene.add(
-        noise
-          .greater(1 - (1 - i / numParticles) * chanceForParticle)
-          .cast(scene.dtype)
-      );
-    }
-    return tf.keep(scene);
-  });
-};
-
-const sceneSideLength = 300;
-let scene = generateRandomScene(0.2, sceneSideLength, colourIds.length - 1);
-
-const newSceneArray = (n = 0) =>
-  new Array(scene.shape[0])
-    .fill()
-    .map(() => new Array(scene.shape[1]).fill([n]));
-
-const sceneSides = {
-  bottom: newSceneArray(),
-  top: newSceneArray(),
-};
-
-for (let i in sceneSides.bottom[scene.shape[0] - 1]) {
-  sceneSides.bottom[scene.shape[0] - 1][i] = [1];
-}
-for (let i in sceneSides.top[0]) {
-  sceneSides.top[0][i] = [1];
-}
-sceneSides.bottom = tf.tensor(sceneSides.bottom, scene.shape);
-sceneSides.top = tf.tensor(sceneSides.top, scene.shape);
-sceneSides.right = sceneSides.bottom.transpose().reshape(scene.shape);
-sceneSides.left = sceneSides.top.transpose().reshape(scene.shape);
-
-const sceneSideMasks = {};
-for (let key of Object.keys(sceneSides)) {
-  sceneSideMasks[key] = sceneSides[key].cast("bool");
-}
 
 function mapIdsToColours(tiles, cols) {
   return tf.tidy(() => {
@@ -290,49 +94,25 @@ function mapIdsToColours(tiles, cols) {
   });
 }
 
-function drawCircle(particleId) {
-  const newScene = tf.tidy(() => {
-    const xCoordsDst = tf
-      .range(0, sceneSideLength)
-      .tile([sceneSideLength])
-      .reshape(scene.shape);
-    const sceneWithCircle = xCoordsDst
-      .sub(mouse.pos.x)
-      .pow(2)
-      .add(xCoordsDst.transpose().reshape(scene.shape).sub(mouse.pos.y).pow(2))
-      .less(paramConfig.getVal("drawRadius") ** 2)
-      .cast(scene.dtype)
-      .mul(particleId);
-    return tf.keep(sceneWithCircle.where(sceneWithCircle.greater(0), scene));
-  });
-  scene.dispose();
-  scene = newScene;
-}
-
-function clearTiles() {
-  const newScene = tf.zeros(scene.shape);
-  scene.dispose();
-  scene = newScene;
-}
-
-let randomNoise;
 function update() {
-  if (paramConfig.clicked("clearTiles")) {
-    clearTiles();
+  if (state.config.clicked("clearTiles")) {
+    state.tiles.clearData();
     return;
   }
-  if (randomNoise) randomNoise.dispose();
-  randomNoise = tf.randomUniform(scene.shape);
+
+  state.noise.dispose();
+  state.noise = tf.randomUniform(state.tiles.data.shape);
+
   if (mouse.down) {
-    drawCircle(paramConfig.getVal("selectedTile"));
-  }
-  for (let convolution of convolutions) {
-    const newScene = tf.tidy(() =>
-      tf.keep(convolution.convolve.call(convolution, scene, randomNoise))
+    state.tiles.drawCircle(
+      mouse.pos.x,
+      mouse.pos.y,
+      state.config.getVal("drawRadius"),
+      state.config.getVal("selectedTile")
     );
-    scene.dispose();
-    scene = newScene;
   }
+
+  rules.forEach((rule) => (state.tiles.data = rule.tidiedConvolve(state)));
 }
 
 let pixelData;
@@ -340,18 +120,20 @@ let pixelData;
 function run() {
   update();
   if (pixelData) pixelData.dispose();
-  pixelData = mapIdsToColours(scene, colours);
+  pixelData = mapIdsToColours(state.tiles.data, colours);
   tf.browser.toPixels(pixelData, canvas);
-  setTimeout(run, (1 / paramConfig.getVal("tps")) * 1000);
+  setTimeout(run, (1 / state.config.getVal("tps")) * 1000);
 }
 
-function countTiles() {
-  let count = new Array(colourIds.length).fill(0);
-  for (let val of scene.dataSync()) {
-    count[val]++;
-  }
-  return count;
-}
-
-paramConfig.tellListeners(true);
+state.tiles.generateRandomTiles(0.2, colourIds.length - 1);
+state.config.tellListeners(true);
 run();
+
+/*
+sand: down left, down right, down
+water: left, down left, right, down right, down
+wood: stuck
+smoke: opposite of water
+
+velocity?
+*/
