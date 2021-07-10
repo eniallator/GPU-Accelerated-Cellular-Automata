@@ -1,2 +1,3 @@
 # GPU-Accelerated-Cellular-Automata
-Written using the Love2D game engine.
+
+Particle based cellular automata using convolution with tensorflowjs.
