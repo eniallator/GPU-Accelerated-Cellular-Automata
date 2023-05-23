@@ -76,7 +76,7 @@ class Tiles {
   }
 
   clearData() {
-    this.data = tf.zeros(this.shape);
+    this.data = tf.zeros(this.#data.shape);
   }
 
   countTiles() {
