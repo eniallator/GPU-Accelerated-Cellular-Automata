@@ -9,6 +9,7 @@ const state = {
   tiles: new Tiles(300),
 };
 state.noise = tf.randomUniform(state.tiles.data.shape);
+const imgUrl = "./resized_yoda.jpg";
 
 const rules = [
   new FallLeft(),
@@ -75,12 +76,9 @@ function hexToRGB(hex) {
 const colourIds = ["bgColour", "sandColour", "waterColour"];
 let colours;
 
-state.config.addListener(
-  (_, updates) => {
-    colours = colourIds.map((id) => hexToRGB(state.config.getVal(id)));
-  },
-  ["bgColour", "sandColour", "waterColour"]
-);
+state.config.addListener((_, updates) => {
+  colours = colourIds.map((id) => hexToRGB(state.config.getVal(id)));
+}, colourIds);
 
 function mapIdsToColours(tiles, cols) {
   return tf.tidy(() => {
@@ -116,18 +114,63 @@ function update() {
 }
 
 let pixelData;
+let loadingInProgress = true;
+const neighbourUpdates = new NeighourUpdates();
 
 function run() {
-  update();
+  // update();
+  // if (pixelData) pixelData.dispose();
+  // pixelData = mapIdsToColours(state.tiles.data, colours);
+
+  // console.log(tf.tiles);
+  state.tiles.data = neighbourUpdates.tidiedConvolve(state);
   if (pixelData) pixelData.dispose();
-  pixelData = mapIdsToColours(state.tiles.data, colours);
+  pixelData = state.tiles.data.sub(1);
   tf.browser.toPixels(pixelData, canvas);
   setTimeout(run, (1 / state.config.getVal("tps")) * 1000);
 }
 
-state.tiles.generateRandomTiles(0.2, colourIds.length - 1);
+// state.tiles.generateRandomTiles(0.2, colourIds.length - 1);
+state.tiles.data = tf.ones(state.tiles.data.shape);
 state.config.tellListeners(true);
-run();
+
+const img = document.querySelector("#loading-img");
+img.src = imgUrl;
+img.onload = (evt) => {
+  const loadedImageCanvas = document.querySelector("#loading-canvas");
+  loadedImageCanvas.width = canvas.width;
+  loadedImageCanvas.height = canvas.height;
+
+  const imageCtx = loadedImageCanvas.getContext("2d");
+  imageCtx.drawImage(img, 0, 0, img.width, img.height);
+
+  state.image = tf.tidy(() => {
+    const rawImage = tf.browser.fromPixels(
+      imageCtx.getImageData(0, 0, img.width, img.height),
+      1
+    );
+    // const resizedImage = tf.image.resizeNearestNeighbor(
+    //   rawImage,
+    //   [state.tiles.data.shape[0], state.tiles.data.shape[1]],
+    //   true
+    // );
+    const blackAndWhiteImage = rawImage.greaterEqual(110 / 2);
+    const offsetImage = blackAndWhiteImage.add(1);
+
+    return tf.keep(offsetImage);
+  });
+  if (loadingInProgress) {
+    loadingInProgress = false;
+  } else {
+    run();
+  }
+};
+
+if (loadingInProgress) {
+  loadingInProgress = false;
+} else {
+  run();
+}
 
 /*
 sand: down left, down right, down

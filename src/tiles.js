@@ -89,8 +89,12 @@ class Tiles {
   }
 
   set data(newData) {
+    const sameShape =
+      newData.shape.length === this.#data.shape.length &&
+      newData.shape.every((val, i) => val === this.#data.shape[i]);
     this.#data.dispose();
     this.#data = newData;
+    if (!sameShape) this.generateSides();
   }
   get data() {
     return this.#data;
